@@ -1,8 +1,17 @@
-"""Supervisor / router skeleton."""
+"""Supervisor / router that decides which worker runs next."""
+
+import logging
 
 from multi_agent_research_lab.agents.base import BaseAgent
-from multi_agent_research_lab.core.errors import StudentTodoError
+from multi_agent_research_lab.core.config import get_settings
 from multi_agent_research_lab.core.state import ResearchState
+
+logger = logging.getLogger(__name__)
+
+ROUTE_RESEARCHER = "researcher"
+ROUTE_ANALYST = "analyst"
+ROUTE_WRITER = "writer"
+ROUTE_DONE = "done"
 
 
 class SupervisorAgent(BaseAgent):
@@ -11,12 +20,22 @@ class SupervisorAgent(BaseAgent):
     name = "supervisor"
 
     def run(self, state: ResearchState) -> ResearchState:
-        """Update `state.route_history` with the next route.
+        settings = get_settings()
 
-        TODO(student): Implement routing policy. Suggested steps:
-        - Inspect request, current notes, and missing fields.
-        - Choose one of: researcher, analyst, writer, done.
-        - Enforce max iterations and failure fallback.
-        """
+        if state.iteration >= settings.max_iterations:
+            logger.warning("Max iterations (%d) reached; forcing done", settings.max_iterations)
+            state.record_route(ROUTE_DONE)
+            return state
 
-        raise StudentTodoError("TODO(student): implement SupervisorAgent.run")
+        if state.final_answer is not None:
+            next_route = ROUTE_DONE
+        elif state.analysis_notes is None and state.research_notes is not None:
+            next_route = ROUTE_ANALYST
+        elif state.research_notes is None:
+            next_route = ROUTE_RESEARCHER
+        else:
+            next_route = ROUTE_WRITER
+
+        state.record_route(next_route)
+        logger.info("Supervisor routed to %s (iteration %d)", next_route, state.iteration)
+        return state
